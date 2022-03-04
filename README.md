@@ -9,13 +9,13 @@ Minimum code npct clinical report with bigN headers.  Keywords: sas sql join mer
     https://tinyurl.com/ybf6c8pu
     https://communities.sas.com/t5/ODS-and-Base-Reporting/Proc-Report-Column-Header-using-variable/m-p/487910
 
-    for more flexible solutuons see (or search on 'report'
+    for more flexible solutuons see (or search on 'report' in github)
     https://github.com/rogerjdeangelis/utl_flexible_proc_report
     https://github.com/rogerjdeangelis/utl_clinical_report
     https://github.com/rogerjdeangelis/utl_crosstab_dataset_3_lines_of_code
 
 
-    WANT
+    OUTPUT
     ====
                         MINIMAL CODE CLINICAL REPORT
 
@@ -37,55 +37,7 @@ Minimum code npct clinical report with bigN headers.  Keywords: sas sql join mer
       RACE         Black            5(55.6%)      4(44.4%)
                    Multi-Race       3(100.0%)     0(0.0%)
                    White            9(45.0%)      11(55.0%)
-
-
-    ALL THE CODE
-    ============
-
-      proc transpose data=have out=havxpo;
-      by patient_id trt ;
-      var Race Gender Ethnicity AgeGroup;
-      run;quit;
-
-      proc sql;
-        select resolve(catx(" ",'%Let',trt,'=',trt,'#(N=',Put(Count(patient_id),4.),');'))
-             from have  Group by trt
-      ;quit;
-
-      data havadd;
-       set havxpo;
-       mjrMnr=catx('@',_name_,col1);
-      run;quit;
-
-      ods exclude all;
-      ods output observed      =xpocnt(drop=sum);
-      ods output rowprofilespct=xporowpct;
-      proc corresp data=havadd all dimens=1 print=both;
-       tables   mjrMnr, trt;
-      run;quit;
-      ods select all;
-
-      data havNpc(where=(label ne 'Sum'));
-        length Major Minor label  Aspirin Placebo $32 ;
-        merge xpocnt   (rename=(Placebo=Placebocnt Aspirin=Aspirincnt))
-              xpoRowPct(rename=(Placebo=Placebopct Aspirin=Aspirinpct));
-        Aspirin     = cats(put(Aspirincnt,4.),'(',put(Aspirinpct,5.1),'%)');
-        Placebo     = cats(put(Placebocnt,4.),'(',put(Placebopct,5.1),'%)');
-        Major=scan(label,1,'@');
-        Minor=scan(label,2,'@');
-        keep Major Minor label Aspirin Placebo;
-      run;quit;
-
-      proc report data=havNpc nowd split='#';
-        title " MINIMALL CODE CLINICAL REPORT";
-        cols Major Minor Aspirin Placebo;
-        define major / order;
-        define minor / order;
-        define aspirin / "&aspirin";
-        define placebo /"&placebo";
-      run;quit;
-
-    MAKE  DATA
+     INPUT
     ==========
 
     data have;
@@ -130,3 +82,59 @@ Minimum code npct clinical report with bigN headers.  Keywords: sas sql join mer
     ;;;;
     run;quit;
 
+
+    ALL THE CODE
+    ============
+
+      * Normalize ie make long and skinny;
+      
+      proc transpose data=have out=havxpo;
+      by patient_id trt ;
+      var Race Gender Ethnicity AgeGroup;
+      run;quit;
+
+      * create big N header macro variables witht he same names as proc report treatement names;
+      proc sql;
+        select resolve(catx(" ",'%Let',trt,'=',trt,'#(N=',Put(Count(patient_id),4.),');'))
+             from have  Group by trt
+      ;quit;
+
+      * cretae major and minor categories for report;
+      data havadd;
+       set havxpo;
+       mjrMnr=catx('@',_name_,col1);
+      run;quit;
+
+      * transpose so treament columns are across;
+      ods exclude all;
+      ods output observed      =xpocnt(drop=sum);
+      ods output rowprofilespct=xporowpct;
+      proc corresp data=havadd all dimens=1 print=both;
+       tables   mjrMnr, trt;
+      run;quit;
+      ods select all;
+
+      * merge percent and counts so that we have N(PCT) for each treament;
+      data havNpc(where=(label ne 'Sum'));
+        length Major Minor label  Aspirin Placebo $32 ;
+        merge xpocnt   (rename=(Placebo=Placebocnt Aspirin=Aspirincnt))
+              xpoRowPct(rename=(Placebo=Placebopct Aspirin=Aspirinpct));
+        Aspirin     = cats(put(Aspirincnt,4.),'(',put(Aspirinpct,5.1),'%)');
+        Placebo     = cats(put(Placebocnt,4.),'(',put(Placebopct,5.1),'%)');
+        Major=scan(label,1,'@');
+        Minor=scan(label,2,'@');
+        keep Major Minor label Aspirin Placebo;
+      run;quit;
+
+      *just a dumb proc report - note we have  table configured like the report - tabulate doe not provide a report;
+      ( anso notice the macro vatiables with bigNs;
+      proc report data=havNpc nowd split='#';
+        title " MINIMALL CODE CLINICAL REPORT";
+        cols Major Minor Aspirin Placebo;
+        define major / order;
+        define minor / order;
+        define aspirin / "&aspirin";
+        define placebo /"&placebo";
+      run;quit;
+
+    
